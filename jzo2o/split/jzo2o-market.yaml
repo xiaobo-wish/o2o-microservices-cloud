@@ -1,0 +1,53 @@
+# 组件：jzo2o-market
+# 从 jz.yaml 拆分，可直接 kubectl apply -f 应用
+
+# ---------- 57. Deployment/jzo2o-market ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jzo2o-market
+  namespace: jzo2o
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jzo2o-market
+  template:
+    metadata:
+      labels:
+        app: jzo2o-market
+    spec:
+      containers:
+        - name: jzo2o-market
+          image: jzo2o/jzo2o-market:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 11510
+          env:
+            - name: NACOS_USERNAME
+              value: nacos
+            - name: NACOS_PASSWORD
+              value: nacos
+            - name: NACOS_ADDR
+              value: nacos:8848
+            - name: NACOS_NAMESPACE
+              value: "75a593f5-33e6-4c65-b2a0-18c403d20f63"
+            - name: JAVA_OPTS
+              value: "-Dspring.profiles.active=prod -Xms128m -Xmx256m"
+---
+
+# ---------- 58. Service/jzo2o-market ----------
+apiVersion: v1
+kind: Service
+metadata:
+  name: jzo2o-market
+  namespace: jzo2o
+spec:
+  type: ClusterIP
+  selector:
+    app: jzo2o-market
+  ports:
+    - name: http
+      port: 11510
+      targetPort: 11510
+---

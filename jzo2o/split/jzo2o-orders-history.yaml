@@ -1,0 +1,53 @@
+# 组件：jzo2o-orders-history
+# 从 jz.yaml 拆分，可直接 kubectl apply -f 应用
+
+# ---------- 53. Deployment/jzo2o-orders-history ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jzo2o-orders-history
+  namespace: jzo2o
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jzo2o-orders-history
+  template:
+    metadata:
+      labels:
+        app: jzo2o-orders-history
+    spec:
+      containers:
+        - name: jzo2o-orders-history
+          image: jzo2o/jzo2o-orders-history:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 11508
+          env:
+            - name: NACOS_USERNAME
+              value: nacos
+            - name: NACOS_PASSWORD
+              value: nacos
+            - name: NACOS_ADDR
+              value: nacos:8848
+            - name: NACOS_NAMESPACE
+              value: "75a593f5-33e6-4c65-b2a0-18c403d20f63"
+            - name: JAVA_OPTS
+              value: "-Dspring.profiles.active=prod -Xms128m -Xmx256m"
+---
+
+# ---------- 54. Service/jzo2o-orders-history ----------
+apiVersion: v1
+kind: Service
+metadata:
+  name: jzo2o-orders-history
+  namespace: jzo2o
+spec:
+  type: ClusterIP
+  selector:
+    app: jzo2o-orders-history
+  ports:
+    - name: http
+      port: 11508
+      targetPort: 11508
+---

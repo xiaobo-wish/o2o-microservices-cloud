@@ -1,0 +1,70 @@
+# 组件：redis
+# 从 jz.yaml 拆分，可直接 kubectl apply -f 应用
+
+# ---------- 26. ConfigMap/redis-config ----------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: jzo2o
+data:
+  redis.conf: |
+    bind 0.0.0.0
+    protected-mode no
+    port 6379
+    requirepass redis
+    appendonly yes
+    dir /data
+---
+
+# ---------- 27. PersistentVolume/redis-pv-single ----------
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-pv-single
+  labels:
+    app: redis
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: worker02.itcast.cn
+    path: /data/nfs/redis-single
+---
+
+# ---------- 28. PersistentVolumeClaim/redis-pvc-single ----------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc-single
+  namespace: jzo2o
+spec:
+  accessModes:
+    - ReadWriteOnce
+  selector:
+    matchLabels:
+      app: redis
+  resources:
+    requests:
+      storage: 2Gi
+---
+
+# ---------- 29. Service/redis ----------
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: jzo2o
+spec:
+  type: NodePort
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      nodePort: 30379
+---

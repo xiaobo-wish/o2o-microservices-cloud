@@ -1,0 +1,171 @@
+# 组件：rabbitmq
+# 从 jz.yaml 拆分，可直接 kubectl apply -f 应用
+
+# ---------- 12. ConfigMap/rabbitmq-config ----------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: jzo2o
+data:
+  enabled_plugins: |
+    [rabbitmq_management, rabbitmq_shovel, rabbitmq_shovel_management].
+  rabbitmq.conf: |
+    loopback_users = none
+    default_user = admin
+    default_pass = Aa123456.
+    default_vhost = /
+    management.load_definitions = /etc/rabbitmq/definitions.json
+  definitions.json: |
+    {
+      "users": [
+        { "name": "xzb", "password": "xzb", "tags": "" },
+        { "name": "czri", "password": "czri1234", "tags": "administrator" }
+      ],
+      "vhosts": [
+        { "name": "/" },
+        { "name": "/xzb" }
+      ],
+      "permissions": [
+        { "user": "xzb", "vhost": "/xzb", "configure": ".*", "write": ".*", "read": ".*" },
+        { "user": "czri", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*" },
+        { "user": "czri", "vhost": "/xzb", "configure": ".*", "write": ".*", "read": ".*" }
+      ],
+      "parameters": [],
+      "policies": [],
+      "queues": [],
+      "exchanges": [
+        {
+          "name": "exchange.canal-jzo2o",
+          "vhost": "/xzb",
+          "type": "topic",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        }
+      ],
+      "bindings": []
+    }
+---
+
+# ---------- 13. PersistentVolume/rabbitmq-pv-single ----------
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: rabbitmq-pv-single
+  labels:
+    app: rabbitmq
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: worker02.itcast.cn
+    path: /data/nfs/rabbitmq-single
+---
+
+# ---------- 14. PersistentVolumeClaim/rabbitmq-pvc-single ----------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rabbitmq-pvc-single
+  namespace: jzo2o
+spec:
+  accessModes:
+    - ReadWriteOnce
+  selector:
+    matchLabels:
+      app: rabbitmq
+  resources:
+    requests:
+      storage: 5Gi
+---
+
+# ---------- 15. Deployment/rabbitmq ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: jzo2o
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: docker.io/library/rabbitmq:3.13-management
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: admin
+            - name: RABBITMQ_DEFAULT_PASS
+              value: Aa123456.
+          readinessProbe:
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/rabbitmq
+            - name: data
+              mountPath: /var/lib/rabbitmq
+      volumes:
+        - name: config
+          configMap:
+            name: rabbitmq-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: rabbitmq-pvc-single
+---
+
+# ---------- 16. Service/rabbitmq ----------
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: jzo2o
+spec:
+  type: NodePort
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+      nodePort: 31399
+    - name: management
+      port: 15672
+      targetPort: 15672
+      nodePort: 31672
+---

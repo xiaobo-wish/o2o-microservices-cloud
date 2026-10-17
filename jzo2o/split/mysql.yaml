@@ -1,0 +1,138 @@
+# 组件：mysql
+# 从 jz.yaml 拆分，可直接 kubectl apply -f 应用
+
+# ---------- 1. Secret/mysql-secret ----------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+  namespace: jzo2o
+type: Opaque
+data:
+  MYSQL_ROOT_PASSWORD: QWExMjM0NTYu
+  MYSQL_USER: bmFjb3M=
+  MYSQL_PASSWORD: QWExMjM0NTYu
+---
+
+# ---------- 2. ConfigMap/mysql-config ----------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+  namespace: jzo2o
+data:
+  my.cnf: |
+    [client]
+    default-character-set = utf8mb4
+
+    [mysqld]
+    log-bin=mysql-bin
+    binlog-format=ROW
+    server_id=1
+    character_set_server=utf8mb4
+    collation_server=utf8mb4_bin
+---
+
+# ---------- 3. PersistentVolume/mysql-pv-single ----------
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv-single
+  labels:
+    app: mysql
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: worker02.itcast.cn
+    path: /data/nfs/mysql-single
+---
+
+# ---------- 4. PersistentVolumeClaim/mysql-pvc-single ----------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc-single
+  namespace: jzo2o
+spec:
+  accessModes:
+    - ReadWriteOnce
+  selector:
+    matchLabels:
+      app: mysql
+  resources:
+    requests:
+      storage: 10Gi
+---
+
+# ---------- 5. StatefulSet/mysql ----------
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: jzo2o
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:8.0.26
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 1Gi
+          ports:
+            - containerPort: 3306
+              name: mysql
+          env:
+            - name: TZ
+              value: Asia/Shanghai
+            - name: MYSQL_DATABASE
+              value: db_nacos_config
+          envFrom:
+            - secretRef:
+                name: mysql-secret
+          volumeMounts:
+            - name: mysql-config
+              mountPath: /etc/mysql/conf.d/my.cnf
+              subPath: my.cnf
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-config
+          configMap:
+            name: mysql-config
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-pvc-single
+---
+
+# ---------- 6. Service/mysql ----------
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: jzo2o
+spec:
+  selector:
+    app: mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+---
